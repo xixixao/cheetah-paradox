@@ -1,0 +1,502 @@
+<html>
+
+<head>
+  <title>Special Relativity - The Cheetah Paradox</title>
+</head>
+
+<body style="margin: 0; font-family: sans-serif">
+  <div style="position: absolute; width: 100%; padding: 20px;">
+    <div style="margin: 0 auto; display: block; width: 300px">
+      <div>
+        Speed
+        <input id="speedSlider" type="range" min="0" max="0.99" value="0.5" step="0.01" style="width: 50%">
+      </div>
+      <div>
+        Acceleration
+        <input id="accelerationSlider" type="range" min="0" max="6" value="6" step="0.06" style="width: 50%">
+      </div>
+    </div>
+
+    <div id="topIntro" style="width: 40em"></div>
+  </div>
+  <div id="bottomIntro" style="position: absolute; width: 40em; bottom: 0; padding: 20px;">
+  </div>
+  <canvas id="canvas"></canvas>
+  <script>
+    const topIntroElement = document.getElementById('topIntro');
+    const bottomIntroElement = document.getElementById('bottomIntro');
+    const { sqrt } = Math;
+
+
+    const state = {};
+    const listeners = [];
+
+    const hook = (emitter, event, listener) => {
+      emitter.addEventListener(event, () => {
+        listener();
+        update();
+      });
+      listeners.push(listener);
+    };
+
+    const speedSliderElement = document.getElementById('speedSlider');
+    const stickyPoints = [0.5];
+    const stickiness = 0.05;
+    hook(speedSliderElement, 'input', () => {
+      value = +speedSliderElement.value;
+      stickyPoints.forEach(stickyPoint => {
+        if (value > stickyPoint - stickiness && value < stickyPoint + stickiness) {
+          value = stickyPoint;
+        }
+      });
+      state.speedSliderValue = value;
+    });
+
+    const accelerationSliderElement = document.getElementById('accelerationSlider');
+    const maxAcceleration = +accelerationSliderElement.max;
+    hook(accelerationSliderElement, 'input', () => {
+      value = +accelerationSliderElement.value;
+      state.accelerationSliderValue = value === maxAcceleration ? null : sqrd(value);
+    });
+
+    function update() {
+      drawSituation(
+        state.speedSliderValue,
+        state.accelerationSliderValue,
+        state.screenModifier,
+      );
+    }
+
+    const canvasElement = document.getElementById('canvas');
+    const c = canvasElement.getContext('2d');
+
+    const div = (a, b) => floor(a / b);
+    const sqrd = (a) => a * a;
+
+    const range = (n) => [...Array(n).keys()];
+    const radians = (degrees) => degrees * Math.PI / 180;
+    const floor_ = (p) => [Math.floor(p[0]), Math.floor(p[1])];
+    const _ = (a, p) => {
+      const determinant = Math.sqrt(Math.abs(a[0] * a[4] - a[1] * a[3]));
+      const gx = (a[0] * p[2] + a[1] * p[3]) / determinant;
+      const gy = (a[3] * p[2] + a[4] * p[3]) / determinant;
+      return [
+        a[0] * p[0] + a[1] * p[1] + a[2] + gx,
+        a[3] * p[0] + a[4] * p[1] + a[5] + gy,
+        0,
+        0,
+      ];
+    };
+    const len = (a) => sqrt(a[0] * a[0] + a[1] * a[1]);
+    const rate = (a) => a[0] / a[1];
+    const id_ = [1, 0, 0, 0, 1, 0];
+    const add_ = (a) => [1, 0, a[0], 0, 1, a[1]];
+    const mul_ = (a) => [a[0], 0, 0, 0, a[1], 0, 0];
+    const sub_ = (a) => [1, 0, -a[0], 0, 1, -a[1]];
+    const dist = (a, b) => len(_(sub_(a), b));
+    const slope = (a, b) => rate(_(sub_(a), b))
+    const rot_ = (angle) => {
+      const rad = radians(angle);
+      const c = Math.cos(rad);
+      const s = Math.sin(rad);
+      return [c, -s, 0, s, c, 0];
+    };
+
+    const p = ({ x, y, gx, gy }) => [x ?? 0, y ?? 0, gx ?? 0, gy ?? 0];
+    const b = (a, b) => [a, b, 0, 0];
+
+    const $ = (a, b) =>
+      [
+        a[0] * b[0] + a[1] * b[3],
+        a[0] * b[1] + a[1] * b[4],
+        a[0] * b[2] + a[1] * b[5] + a[2],
+        a[3] * b[0] + a[4] * b[3],
+        a[3] * b[1] + a[4] * b[4],
+        a[3] * b[2] + a[4] * b[5] + a[5],
+      ];
+
+
+    const line = (a, b) => ({ type: 'line', a, b });
+    const group = (at, ...items) => ({ type: 'group', at, items: items.filter(Boolean) });
+    const __ = (a, g) => group($(a, g.at), ...g.items);
+
+    const axis = (start, end) =>
+      group(
+        id_,
+        line(b(start - 0.3, 0), b(end + 0.3, 0)),
+        ...range(1 + end - start)
+          .flatMap(i => (start + i) === 0 ? [] : [line(
+            p({ x: start + i, gy: 5 }),
+            p({ x: start + i, gy: -5 }))])
+      );
+
+    const color = (name, element) => ({ ...element, color: name });
+    const color_ = color;
+    const dashed_pattern = [6, 4];
+    const dashed = (element) => ({ ...element, dash_pattern: dashed_pattern });
+    const dotted_pattern = [1, 4];
+    const dotted = (element) => ({ ...element, dash_pattern: dotted_pattern });
+
+
+    const situation = (...objects) => ({ objects });
+    const observer = ({ name, color, duration }) =>
+      ({
+        name, color, path: [
+          b(0, 0),
+          b(0, duration),
+        ]
+      });
+
+    const pickObserver = (observerName, objects) =>
+      objects.filter(object => object.name === observerName)[0];
+
+    const mapPairs = (array, fn) => {
+      const result = [];
+      for (let i = 0; i < array.length - 1; i++) {
+        result.push(fn(array[i], array[i + 1], i, array));
+      }
+      return result;
+    }
+
+    const produce = (array, fn, init) => {
+      const result = [];
+      let acc = init;
+      for (let i = 0; i < array.length; i++) {
+        result.push(acc = fn(acc, array[i], i, array));
+      }
+      return result;
+    }
+
+    const flatMapPairs = (array, fn) => {
+      const result = [];
+      for (let i = 0; i < array.length - 1; i++) {
+        result.push(...fn(array[i], array[i + 1], i, array));
+      }
+      return result;
+    }
+
+    const pipe = (value, ...fns) => {
+      return fns.reduce((acc, fn) => fn(acc), value);
+    }
+
+    const isObserving = (start, end, point) =>
+      point[1] >= start[1] && point[1] <= end[1];
+
+    const lorentzTransform = (s) => {
+      const f = sqrt(1 - s * s);
+      return [
+        1 / f, -s / f, 0,
+        -s / f, 1 / f, 0,
+      ];
+    }
+
+    const observationBoundary = (from, to, at) =>
+      isObserving(from, to, at)
+        ? b(from[0] + (at[1] - from[1]) * slope(from, to), at[1])
+        : null;
+
+    const asObserved = (from, to, start, end, isObserver) => {
+      const startObserved = observationBoundary(from, to, start);
+      const endObserved = observationBoundary(from, to, end);
+      const totallyObserved = startObserved != null && endObserved != null;
+      const partObserved = startObserved != null || endObserved != null ||
+        isObserving(start, end, from);
+      if (!partObserved || isObserver && !totallyObserved) {
+        return [];
+      }
+      const result = [];
+      if (startObserved != null) {
+        result.push([from, startObserved, 'past']);
+      }
+      result.push([startObserved ?? from, endObserved ?? to, 'present']);
+      if (endObserved != null) {
+        result.push([endObserved, to, 'future']);
+      }
+      return result;
+    }
+
+    const applyPerspective = (observerName, { objects }) => {
+      const observer = pickObserver(observerName, objects);
+      // each path segment of observer is a rendering
+      // phase, plus 2 phases for what happens before and
+      // after if the observer kept the same speed
+      return {
+        observerName,
+        lifetimes: pipe(
+          mapPairs(observer.path, (start, end) => {
+            const speed = slope(start, end);
+            const transform = $(lorentzTransform(speed), sub_(start));
+            return {
+              start: _(transform, start),
+              end: _(transform, end),
+              speed,
+              transform,
+            };
+          }),
+          $$ => produce($$, (soFar, current, i, list) => {
+            const isLast = i === list.length - 1;
+            if (soFar == null) {
+              return { ...current, isFirst: true, isLast };
+            }
+            const advance = add_(soFar.end);
+            return {
+              start: _(advance, current.start),
+              end: _(advance, current.end),
+              transform: $(advance, current.transform),
+              isFirst: false,
+              isLast,
+            };
+          }),
+          $$ => $$.flatMap(({ start, end, transform, isFirst, isLast }) => {
+            return objects.flatMap(({ color, path, name }) =>
+              pipe(
+                path.map(point => _(transform, point)),
+                $$ => flatMapPairs($$, (from, to) =>
+                  asObserved(from, to, start, end, name === observerName)
+                )
+                  .map(([from, to, tag]) => ({ from, to, tag, name, color }))
+              ));
+          }),
+        )
+      };
+    }
+
+    const applyLifetimeTag = (tag, object, showNonPresent) => {
+      switch (tag) {
+        case 'present':
+          return object;
+        case 'past':
+        case 'future':
+          return showNonPresent ? dashed(object) : null;
+        default:
+          throw tag;
+      }
+    }
+
+    const renderPerspective = ({ lifetimes }, showNonPresent) =>
+      group(id_,
+        ...lifetimes.map(({ from, to, tag, color }) =>
+          applyLifetimeTag(
+            tag,
+            color_(color, line(from, to)),
+            showNonPresent,
+          )
+        ).filter(Boolean)
+      );
+
+    const lifetime = ({ observerName, lifetimes }) =>
+      Math.max(
+        ...lifetimes
+          .filter(({ name }) => name === observerName)
+          .map(({ to }) => to[1])
+      )
+
+    function draw(element, at) {
+      if (element.color != null) {
+        c.strokeStyle = element.color;
+        if (element.dash_pattern != null) {
+          c.strokeStyle = c.strokeStyle + "55";
+        }
+      }
+      if (element.dash_pattern != null) {
+        c.setLineDash(element.dash_pattern);
+      }
+      switch (element.type) {
+        case 'group':
+          element.items.forEach(item => draw(item, $(at, element.at)));
+          break;
+        case 'line':
+          c.beginPath();
+          c.moveTo(..._(at, element.a));
+          c.lineTo(..._(at, element.b));
+          c.stroke();
+          break;
+        default:
+          throw element;
+      }
+      c.setLineDash([]);
+      c.strokeStyle = 'black';
+    }
+
+    function clear() {
+      c.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+
+    hook(window, 'resize', () => {
+      const screenWidth = document.body.clientWidth;
+      const screenHeight = document.body.clientHeight;
+      canvasElement.width = screenWidth;
+      canvasElement.height = screenHeight;
+      const screenSize = [screenWidth, screenHeight];
+
+      const center = add_(floor_(_(mul_(screenSize), b(0.5, 0.7))));
+      const orientation = mul_([1, -1]);
+      const scale = mul_([100, 100]);
+      const screenModifier = $(center, $(orientation, scale));
+      state.screenModifier = screenModifier;
+    });
+
+    const constantChangeOfSpeedWithSpeedLimitToRest = (before, duration, maxSpeed, acceleration, direction) => {
+      const accelerationDuration = Math.min(maxSpeed / acceleration, duration / 2);
+      const offset = add_(before[before.length - 1]);
+      const numSteps = 100;
+      const halfSteps = numSteps / 2;
+      return before.concat(range(numSteps).map(i => {
+        const time = i + 1 < halfSteps
+          ? 2 * accelerationDuration * (i + 1) / numSteps
+          : duration - 2 * accelerationDuration * (numSteps - i - 1) / numSteps;
+        const timeAccelerating = Math.min(time, accelerationDuration);
+        const timeCruising = Math.min(
+          Math.max(0, time - accelerationDuration),
+          duration - 2 * accelerationDuration,
+        );
+        const timeDecelerating = Math.max(0, time - (duration - accelerationDuration));
+
+        return _(offset, b(
+          direction * (
+            acceleration * sqrd(timeAccelerating) / 2 +
+            maxSpeed * timeCruising +
+            acceleration * (-sqrd(timeDecelerating - accelerationDuration) + sqrd(accelerationDuration)) / 2
+          ),
+          time,
+        ));
+      }));
+    }
+
+    function drawSituation(moverSpeed, moverAcceleration, screenModifier) {
+      const simulationEnd = 4;
+      const tripDuration = 2;
+      const mirrorAndCheetah = situation(
+        observer({
+          name: 'me',
+          color: 'blue',
+          duration: 2 * tripDuration
+        }),
+        {
+          name: 'cheetah',
+          color: 'green',
+          path:
+            moverAcceleration == null || moverSpeed === 0
+              ? [
+                b(0, 0),
+                b(moverSpeed * tripDuration, tripDuration),
+                b(0, 2 * tripDuration)
+              ] :
+              constantChangeOfSpeedWithSpeedLimitToRest(
+                constantChangeOfSpeedWithSpeedLimitToRest(
+                  [b(0, 0)],
+                  tripDuration,
+                  moverSpeed,
+                  moverAcceleration,
+                  1,
+                ),
+                tripDuration,
+                moverSpeed,
+                moverAcceleration,
+                -1,
+              ),
+        },
+        {
+          name: 'light',
+          color: 'orange',
+          path: [
+            b(0, 0),
+            b(1, 1),
+            b(0, 2),
+            b(1, 3),
+            b(0, 4),
+          ]
+        },
+        {
+          name: 'mirror',
+          color: 'gray',
+          path: [
+            b(1, 0),
+            b(1, 4),
+          ]
+        }
+      );
+
+      const mePerspective = applyPerspective('me', mirrorAndCheetah);
+      const showNonPresent = moverAcceleration == null;
+      const stationaryObserverVisualization = group(
+        add_([-2, 0]),
+        axis(-1, 1),
+        __(rot_(90), axis(0, simulationEnd)),
+        renderPerspective(mePerspective, showNonPresent),
+      );
+
+      const cheetahPerspective = applyPerspective('cheetah', mirrorAndCheetah);
+      const movingObserverVisualization = group(
+        add_([2, 0]),
+        axis(-1, 1),
+        __(rot_(90), axis(-1, simulationEnd)),
+        renderPerspective(cheetahPerspective, showNonPresent),
+      );
+      const visualization = group(
+        id_,
+        stationaryObserverVisualization,
+        movingObserverVisualization,
+      );
+
+      const objectByName = (objectName) =>
+        mirrorAndCheetah.objects.find(({ name }) => name === objectName);
+      const objectLabel = (objectName) => {
+        const color = objectByName(objectName).color;
+        return `
+          <span style="
+            color: ${color};
+            font-weight: bold;
+            text-transform: capitalize">${color}</span>`;
+      }
+
+      const moverSpeedOfLightRatio =
+        `${(100 * moverSpeed).toFixed(0)}% speed of light`;
+      const topIntro = `
+        ${objectLabel('me')} is you, an observer<br />
+        ${objectLabel('light')} is light<br />
+        ${objectLabel('mirror')} is a mirror reflecting light,
+          placed at a certain distance from you<br />
+        ${objectLabel('cheetah')} is a cheetah ${
+        moverSpeed > 0
+          ? `traveling from you towards the mirror and back, ${
+          moverAcceleration == null
+            ? `<br />at ${moverSpeedOfLightRatio}<br />`
+            : `<br />accelerating and decelerating at ${moverAcceleration.toFixed(1)} times
+              the speed of light per time unit ${
+            moverSpeed / moverAcceleration > tripDuration / 2
+              ? `<br />`
+              : `<br />with maximum speed of ${moverSpeedOfLightRatio}`
+            }`
+          }<br /><br />
+            When you and the cheetah meet again,<br />the cheetah has experienced
+            only ${(100 * lifetime(cheetahPerspective) / lifetime(mePerspective)).toFixed(0)}% the time you have!`
+          : ``}
+      `
+      topIntroElement.innerHTML = topIntro;
+
+      const bottomIntro = `
+        The situation is not at all symmetrical. On the right we can see the
+        situation from the cheetah's perspective. For the cheetah not only you
+        are moving away from her (that is symmetrical), but the mirror is moving
+        towards her at the same speed.<br />
+        This also means that while the cheetah looks shrunk to you, and you
+        look shrunk to the cheetah, the distance between you and the mirror
+        also looks shrunk to the cheetah, because from the cheetah's perspective
+        the mirror has already moved towards her at the point she's leaving you.
+        <br />
+        Time flows slower for the cheetah from your perspective,
+        and for you from cheetah's perspective. But when the cheetah changes
+        direction, it "jumps forward" in time.
+      `
+      bottomIntroElement.innerHTML = bottomIntro;
+
+      clear();
+      draw(visualization, screenModifier);
+    }
+
+    listeners.forEach(listener => listener());
+    update();
+
+  </script>
