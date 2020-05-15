@@ -2,26 +2,44 @@
 
 <head>
   <title>Special Relativity - The Cheetah Paradox</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    #bottomIntro {
+      margin-top: -100px;
+    }
+
+    @media screen and (min-width: 600px) and (min-height: 860px) {
+      #bottomIntro {
+        position: absolute;
+        bottom: 0;
+      }
+
+      #controls {
+        margin: 0 auto;
+        width: 300px;
+      }
+    }
+  </style>
 </head>
 
-<body style="margin: 0; font-family: sans-serif">
-  <div style="position: absolute; width: 100%; padding: 20px;">
-    <div style="margin: 0 auto; display: block; width: 300px">
-      <div>
-        Speed
-        <input id="speedSlider" type="range" min="0" max="0.99" value="0.5" step="0.01" style="width: 50%">
+<body style="margin: 0; font-family: sans-serif; -webkit-text-size-adjust: none">
+  <div style="position: absolute; width: 100%;">
+    <div style="padding: 20px;">
+      <div id="controls">
+        <div>
+          Speed
+          <input id="speedSlider" type="range" min="0" max="0.99" value="0.5" step="0.01" style="width: 50%">
+        </div>
+        <div>
+          Acceleration
+          <input id="accelerationSlider" type="range" min="0" max="6" value="6" step="0.06" style="width: 50%">
+        </div>
       </div>
-      <div>
-        Acceleration
-        <input id="accelerationSlider" type="range" min="0" max="6" value="6" step="0.06" style="width: 50%">
-      </div>
+      <div id="topIntro" style="max-width: 40em"></div>
     </div>
-
-    <div id="topIntro" style="width: 40em"></div>
-  </div>
-  <div id="bottomIntro" style="position: absolute; width: 40em; bottom: 0; padding: 20px;">
   </div>
   <canvas id="canvas"></canvas>
+  <div id="bottomIntro" style="max-width: 40em; padding: 20px;"></div>
   <script>
     const topIntroElement = document.getElementById('topIntro');
     const bottomIntroElement = document.getElementById('bottomIntro');
@@ -330,9 +348,11 @@
       canvasElement.height = screenHeight;
       const screenSize = [screenWidth, screenHeight];
 
-      const center = add_(floor_(_(mul_(screenSize), b(0.5, 0.7))));
+      const bigScreen = screenWidth > 600 && screenHeight > 860;
+      const center = add_(floor_(_(mul_(screenSize), b(0.5, bigScreen ? 0.7 : 0.8))));
       const orientation = mul_([1, -1]);
-      const scale = mul_([100, 100]);
+      const scaleFactor = bigScreen ? 100 : 40;
+      const scale = mul_([scaleFactor, scaleFactor]);
       const screenModifier = $(center, $(orientation, scale));
       state.screenModifier = screenModifier;
     });
@@ -431,7 +451,7 @@
       const movingObserverVisualization = group(
         add_([2, 0]),
         axis(-1, 1),
-        __(rot_(90), axis(-1, simulationEnd)),
+        __(rot_(90), axis(0, simulationEnd)),
         renderPerspective(cheetahPerspective, showNonPresent),
       );
       const visualization = group(
@@ -484,11 +504,18 @@
         This also means that while the cheetah looks shrunk to you, and you
         look shrunk to the cheetah, the distance between you and the mirror
         also looks shrunk to the cheetah, because from the cheetah's perspective
-        the mirror has already moved towards her at the point she's leaving you.
+        the mirror ${
+        moverAcceleration == null
+          ? `has already moved towards her at the point she's leaving you`
+          : `moved faster towards her than you moved away when she accelerated`
+        }.
         <br />
         Time flows slower for the cheetah from your perspective,
         and for you from cheetah's perspective. But when the cheetah changes
-        direction, it "jumps forward" in time.
+        direction, ${
+        moverAcceleration == null
+          ? `it "jumps forward" in time`
+          : `it moves rapidly into the future`}.
       `
       bottomIntroElement.innerHTML = bottomIntro;
 
